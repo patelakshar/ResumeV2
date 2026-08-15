@@ -1,0 +1,72 @@
+# AI Resume Analyzer — Project Spec
+
+## Stack
+- Frontend: React.js (Vite), Tailwind CSS, React Router, Axios, Recharts, Framer Motion (for animations)
+- Backend: Node.js, Express.js, MongoDB + Mongoose, JWT + bcrypt
+- AI: Google Gemini API (called only from backend, key in .env, never exposed to frontend)
+- File parsing: pdf-parse (PDF) and mammoth (DOCX)
+- PDF report generation: pdfkit or puppeteer
+
+## Pages (Frontend)
+1. Home (landing page, marketing-style, professional theme)
+2. Login / Register (JWT auth, protected routes after login)
+3. Dashboard (overview: recent analyses, quick stats, upload CTA)
+4. Resume Upload (drag-and-drop PDF/DOCX upload)
+5. Resume Analysis (shows ATS score, skills, missing skills, keywords,
+   missing keywords, strengths, weaknesses, grammar/formatting suggestions,
+   improvement suggestions — as charts via Recharts + text)
+6. Job Matching (paste Job Description, matches against a chosen resume,
+   shows: match % out of 10 "should I apply" score, missing skills,
+   expected salary range based on JD, what to add/learn)
+7. Profile (user info, change password)
+8. Analysis History (list of past resume analyses + job matches, with PDF report download)
+
+## Backend APIs
+- POST /api/auth/register
+- POST /api/auth/login
+- GET  /api/auth/me
+- POST /api/resume/upload         (multipart upload, extract text, store in DB)
+- POST /api/resume/analyze/:id    (calls Gemini, returns ATS score + full breakdown)
+- POST /api/jobmatch/:resumeId    (body: jobDescription text; calls Gemini, returns match score)
+- GET  /api/history                (list past analyses for logged-in user)
+- GET  /api/history/:id/pdf        (generate & download PDF report)
+
+## Database Models (Mongoose)
+- User: name, email, passwordHash, createdAt
+- Resume: userId, fileName, extractedText, uploadedAt
+- Analysis: userId, resumeId, atsScore, skills[], missingSkills[], keywords[],
+  missingKeywords[], strengths[], weaknesses[], suggestions[], createdAt
+- JobMatch: userId, resumeId, jobDescription, matchScore (out of 10),
+  missingSkills[], expectedSalaryRange, recommendations[], createdAt
+
+## AI Output Requirements (Gemini prompt must request structured JSON with):
+- atsScore (0–100)
+- skills (array)
+- missingSkills (array)
+- keywords (array)
+- missingKeywords (array)
+- strengths (array)
+- weaknesses (array)
+- grammarSuggestions (array)
+- improvementSuggestions (array)
+- (for job matching) matchScore (0–10), missingSkillsForJob (array),
+  expectedSalaryRange (string), recommendation (string: "Apply" / "Improve first" / "Not a fit")
+
+## UI/Design requirements
+- Professional theme (not playful) — deep blue/indigo or slate + white,
+  clean sans-serif (Inter or similar)
+- Framer Motion for page transitions and subtle element animations
+  (fade/slide on load, animated score counters, animated progress bars for ATS score)
+- Recharts for score visualizations (radial/gauge chart for ATS score,
+  bar chart for skill match)
+- Fully responsive, mobile-friendly
+- Loading skeletons while AI analysis runs (this can take a few seconds)
+
+## Security
+- Passwords hashed with bcrypt
+- JWT stored in httpOnly cookie or Authorization header
+- Gemini API key only in backend .env, never sent to frontend
+- Input validation on all endpoints
+```
+
+---
