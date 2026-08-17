@@ -241,7 +241,7 @@ function JobFinder() {
                   >
                     {resumes.map((resume) => (
                       <option key={resume._id} value={resume._id}>
-                        {resume.filename} (Uploaded: {new Date(resume.createdAt).toLocaleDateString()})
+                        {resume.fileName || resume.filename} (Uploaded: {new Date(resume.uploadedAt || resume.createdAt).toLocaleDateString()})
                       </option>
                     ))}
                   </select>

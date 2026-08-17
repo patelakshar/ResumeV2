@@ -24,7 +24,7 @@ router.post('/find', requireAuth, async (req, res) => {
     }
 
     // Build the AI prompt for job finding
-    const prompt = buildJobFindingPrompt(resume.text, {
+    const prompt = buildJobFindingPrompt(resume.extractedText || resume.text, {
       jobTitle,
       location,
       remote,
