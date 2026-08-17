@@ -1,14 +1,14 @@
 const express = require('express')
 const router = express.Router()
 const { GoogleGenAI } = require('@google/genai')
-const auth = require('../middleware/auth')
+const requireAuth = require('../middleware/authMiddleware')
 const Resume = require('../models/Resume')
 const JobSearch = require('../models/JobSearch')
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
 
 // POST /api/jobs/find - Find jobs matching user's resume with filters
-router.post('/find', auth, async (req, res) => {
+router.post('/find', requireAuth, async (req, res) => {
   try {
     const { resumeId, jobTitle, location, remote, experienceLevel, jobType, salaryMin, company } = req.body
 
@@ -96,7 +96,7 @@ router.post('/find', auth, async (req, res) => {
 })
 
 // GET /api/jobs/history - Get user's job search history
-router.get('/history', auth, async (req, res) => {
+router.get('/history', requireAuth, async (req, res) => {
   try {
     const searches = await JobSearch.find({ userId: req.user.id })
       .sort({ createdAt: -1 })
@@ -109,7 +109,7 @@ router.get('/history', auth, async (req, res) => {
 })
 
 // GET /api/jobs/:id - Get specific job search results
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
   try {
     const search = await JobSearch.findOne({
       _id: req.params.id,
