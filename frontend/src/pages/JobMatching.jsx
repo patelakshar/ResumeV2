@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import api from '../api/axios'
 import ProgressBar from '../components/ProgressBar'
 import Skeleton from '../components/Skeleton'
@@ -11,6 +13,7 @@ import MotionButton from '../components/MotionButton'
 // they can also generate a tailored resume rewrite, a cover letter,
 // and a cold outreach email for that same job.
 function JobMatching() {
+  const navigate = useNavigate()
   const [resumes, setResumes] = useState([])
   const [loadingResumes, setLoadingResumes] = useState(true)
   const [selectedResumeId, setSelectedResumeId] = useState('')
@@ -19,7 +22,11 @@ function JobMatching() {
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
 
-  const [showRewriteForm, setShowRewriteForm] = useState(false)
+  // Main tab state
+  const [activeMainTab, setActiveMainTab] = useState('match')
+  // AI sub-tab state
+  const [activeAiTab, setActiveAiTab] = useState('')
+
   const [skillChecks, setSkillChecks] = useState({})
   const [extraSkills, setExtraSkills] = useState('')
   const [rewriting, setRewriting] = useState(false)
@@ -33,6 +40,15 @@ function JobMatching() {
   const [generatingOutreach, setGeneratingOutreach] = useState(false)
   const [outreachError, setOutreachError] = useState('')
   const [outreachEmail, setOutreachEmail] = useState('')
+
+  const [generatingInterviewPrep, setGeneratingInterviewPrep] = useState(false)
+  const [interviewPrepError, setInterviewPrepError] = useState('')
+  const [interviewPrep, setInterviewPrep] = useState('')
+
+  const [bulletText, setBulletText] = useState('')
+  const [improvingBullet, setImprovingBullet] = useState(false)
+  const [bulletError, setBulletError] = useState('')
+  const [improvedBullet, setImprovedBullet] = useState('')
 
   // Runs once when the page loads, to fetch the list of resumes the
   // user can choose from.
@@ -51,7 +67,8 @@ function JobMatching() {
   // Clears out anything generated for a previous match result, so old
   // rewrites/cover letters don't linger after running a new match.
   function resetGeneratedContent() {
-    setShowRewriteForm(false)
+    setActiveAiTab('')
+    setActiveMainTab('match')
     setSkillChecks({})
     setExtraSkills('')
     setRewrittenResume('')
@@ -60,6 +77,11 @@ function JobMatching() {
     setCoverLetterError('')
     setOutreachEmail('')
     setOutreachError('')
+    setInterviewPrep('')
+    setInterviewPrepError('')
+    setBulletText('')
+    setImprovedBullet('')
+    setBulletError('')
   }
 
   // Sends the selected resume + pasted job description to the backend
@@ -162,229 +184,786 @@ function JobMatching() {
     }
   }
 
+  async function handleGenerateInterviewPrep() {
+    setInterviewPrepError('')
+    setGeneratingInterviewPrep(true)
+
+    try {
+      const res = await api.post(`/jobmatch/${result._id}/interview-prep`)
+      setInterviewPrep(res.data.interviewPrep)
+    } catch (err) {
+      setInterviewPrepError(err.response?.data?.message || 'Could not generate interview prep')
+    } finally {
+      setGeneratingInterviewPrep(false)
+    }
+  }
+
+  async function handleImproveBullet(e) {
+    e.preventDefault()
+    setBulletError('')
+    setImprovedBullet('')
+    setImprovingBullet(true)
+
+    try {
+      const res = await api.post(`/jobmatch/${result._id}/improve-bullet`, { bulletText })
+      setImprovedBullet(res.data.improvedBullet)
+    } catch (err) {
+      setBulletError(err.response?.data?.message || 'Could not improve this bullet')
+    } finally {
+      setImprovingBullet(false)
+    }
+  }
+
   // Picks a color for the recommendation badge so "Apply" looks
   // positive and "Not a fit" looks negative at a glance.
   function recommendationColor(recommendation) {
-    if (recommendation === 'Apply') return 'bg-green-100 text-green-800'
-    if (recommendation === 'Improve first') return 'bg-amber-100 text-amber-800'
-    return 'bg-red-100 text-red-800'
+    if (recommendation === 'Apply') return 'bg-gradient-to-r from-emerald-100 to-emerald-200 text-emerald-800'
+    if (recommendation === 'Improve first') return 'bg-gradient-to-r from-amber-100 to-amber-200 text-amber-900'
+    return 'bg-gradient-to-r from-rose-100 to-rose-200 text-rose-800'
   }
 
+  // Get score color for match score
+  const getMatchScoreColor = (score) => {
+    if (score >= 8) return 'bg-gradient-to-r from-purple-500 to-violet-500'
+    if (score >= 6) return 'bg-gradient-to-r from-blue-500 to-indigo-500'
+    if (score >= 4) return 'bg-gradient-to-r from-amber-500 to-yellow-500'
+    return 'bg-gradient-to-r from-rose-500 to-pink-500'
+  }
+
+  function renderHighlightedJobDescription() {
+    const missingSkills = result?.missingSkillsForJob || []
+
+    if (!jobDescription.trim()) {
+      return <p className="text-slate-400">Paste a job description to preview keywords.</p>
+    }
+
+    if (missingSkills.length === 0) {
+      return <p className="text-slate-600">{jobDescription}</p>
+    }
+
+    const escapedSkills = missingSkills
+      .filter(Boolean)
+      .map((skill) => skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+
+    if (escapedSkills.length === 0) {
+      return <p className="text-slate-600">{jobDescription}</p>
+    }
+
+    const regex = new RegExp(`(${escapedSkills.join('|')})`, 'gi')
+    const parts = jobDescription.split(regex)
+
+    return (
+      <p className="text-slate-600 whitespace-pre-wrap">
+        {parts.map((part, index) =>
+          missingSkills.some((skill) => skill.toLowerCase() === part.toLowerCase()) ? (
+            <mark key={`${part}-${index}`} className="rounded bg-gradient-to-r from-amber-200 to-orange-200 px-1 text-slate-900">
+              {part}
+            </mark>
+          ) : (
+            <span key={`${part}-${index}`}>{part}</span>
+          )
+        )}
+      </p>
+    )
+  }
+
+  const hasActiveGeneration =
+    matching || rewriting || generatingCoverLetter || generatingOutreach || generatingInterviewPrep || improvingBullet
+
   return (
-    <div className="min-h-screen bg-slate-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <h1 className="text-2xl font-semibold text-slate-800 mb-6">Job Matching</h1>
-
-        {/* Two columns on large screens: the match form stays on the
-            left, and every result/rewrite/generated block that follows
-            lives on the right, so the page fills wide viewports instead
-            of stacking everything in one narrow column. */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          <AnimatedCard className="p-6">
-            <form onSubmit={handleMatch}>
-              <label className="block text-sm text-slate-600 mb-1">Resume</label>
-              {loadingResumes ? (
-                <Skeleton className="h-10 w-full mb-4" />
-              ) : resumes.length === 0 ? (
-                <p className="text-slate-500 text-sm mb-4">
-                  You haven't uploaded a resume yet. Upload one first.
-                </p>
-              ) : (
-                <select
-                  value={selectedResumeId}
-                  onChange={(e) => setSelectedResumeId(e.target.value)}
-                  className="w-full border border-slate-300 rounded px-3 py-2 mb-4"
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50/20 pt-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Main Content Area */}
+        <div className="space-y-6">
+          {/* Match Form Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            <AnimatedCard className="border border-slate-200 p-6">
+              <form onSubmit={handleMatch} className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <motion.label
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.4 }}
+                  className="block text-sm text-slate-600 mb-1 lg:col-span-2"
                 >
-                  {resumes.map((resume) => (
-                    <option key={resume._id} value={resume._id}>
-                      {resume.fileName}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              <label className="block text-sm text-slate-600 mb-1">Job Description</label>
-              <textarea
-                value={jobDescription}
-                onChange={(e) => setJobDescription(e.target.value)}
-                rows={8}
-                className="w-full border border-slate-300 rounded px-3 py-2 mb-4"
-                placeholder="Paste the job description here..."
-              />
-
-              {error && (
-                <div className="bg-red-100 text-red-700 text-sm p-2 rounded mb-4">{error}</div>
-              )}
-
-              <MotionButton
-                type="submit"
-                disabled={matching}
-                className="w-full bg-indigo-600 text-white rounded py-2 hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {matching ? 'Matching... (this can take a few seconds)' : 'Match Resume to Job'}
-              </MotionButton>
-            </form>
-          </AnimatedCard>
-
-          <div className="space-y-6">
-            {result && (
-              <AnimatedCard className="p-6">
-                <h2 className="text-lg font-semibold text-slate-800 mb-2">Match Result</h2>
-
-                <p className="text-slate-600 mb-1">Match Score: {result.matchScore} / 10</p>
-                <ProgressBar percent={result.matchScore * 10} />
-
-                <span
-                  className={`inline-block mt-4 mb-4 px-3 py-1 rounded-full text-sm font-medium ${recommendationColor(
-                    result.recommendation
-                  )}`}
-                >
-                  {result.recommendation}
-                </span>
-
-                {result.verdict && (
-                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4">
-                    <p className="text-lg font-semibold text-indigo-800">{result.verdict}</p>
-                    {result.verdictReasons && result.verdictReasons.length > 0 && (
-                      <ul className="list-disc list-inside text-indigo-700 text-sm mt-2 space-y-1">
-                        {result.verdictReasons.map((reason, index) => (
-                          <li key={index}>{reason}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-
-                <p className="text-slate-700 font-medium mb-1">Expected Salary Range</p>
-                <p className="text-slate-600 mb-4">{result.expectedSalaryRange}</p>
-
-                <p className="text-slate-700 font-medium mb-1">Missing Skills For This Job</p>
-                {result.missingSkillsForJob && result.missingSkillsForJob.length > 0 ? (
-                  <ul className="list-disc list-inside text-slate-600 text-sm space-y-1 mb-4">
-                    {result.missingSkillsForJob.map((skill, index) => (
-                      <li key={index}>{skill}</li>
-                    ))}
-                  </ul>
+                  Resume
+                </motion.label>
+                {loadingResumes ? (
+                  <Skeleton className="h-10 w-full mb-4 lg:col-span-2" />
+                ) : resumes.length === 0 ? (
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.5 }}
+                    className="text-slate-500 text-sm mb-4 lg:col-span-2"
+                  >
+                    You haven't uploaded a resume yet. Upload one first.
+                  </motion.p>
                 ) : (
-                  <p className="text-slate-400 text-sm mb-4">None</p>
+                  <motion.select
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    value={selectedResumeId}
+                    onChange={(e) => setSelectedResumeId(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-4 bg-white lg:col-span-2"
+                  >
+                    {resumes.map((resume) => (
+                      <option key={resume._id} value={resume._id}>
+                        {resume.fileName}
+                      </option>
+                    ))}
+                  </motion.select>
                 )}
 
-                <div className="flex gap-2 flex-wrap pt-2 border-t border-slate-100">
-                  <MotionButton
-                    onClick={() => setShowRewriteForm((prev) => !prev)}
-                    className="bg-indigo-600 text-white text-sm rounded px-3 py-2 hover:bg-indigo-700 mt-4"
+                <motion.label
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.55 }}
+                  className="block text-sm text-slate-600 mb-1 lg:col-span-2"
+                >
+                  Job Description
+                </motion.label>
+                <motion.textarea
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                  value={jobDescription}
+                  onChange={(e) => setJobDescription(e.target.value)}
+                  rows={8}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-4 bg-white lg:col-span-2"
+                  placeholder="Paste the job description here..."
+                />
+
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.7 }}
+                    className="bg-red-100 text-red-700 text-sm p-2 rounded-lg mb-4 lg:col-span-2"
                   >
-                    Rewrite for this job
-                  </MotionButton>
-                  <MotionButton
-                    onClick={handleGenerateCoverLetter}
-                    disabled={generatingCoverLetter}
-                    className="bg-slate-800 text-white text-sm rounded px-3 py-2 hover:bg-slate-900 mt-4 disabled:opacity-50"
-                  >
-                    {generatingCoverLetter ? 'Generating...' : 'Generate Cover Letter'}
-                  </MotionButton>
-                  <MotionButton
-                    onClick={handleGenerateOutreach}
-                    disabled={generatingOutreach}
-                    className="bg-slate-800 text-white text-sm rounded px-3 py-2 hover:bg-slate-900 mt-4 disabled:opacity-50"
-                  >
-                    {generatingOutreach ? 'Generating...' : 'Generate Outreach Email'}
-                  </MotionButton>
-                </div>
-              </AnimatedCard>
-            )}
+                    {error}
+                  </motion.div>
+                )}
 
-            {showRewriteForm && result && (
-              <AnimatedCard className="p-6">
-                <form onSubmit={handleRewriteSubmit}>
-                  <h2 className="text-lg font-semibold text-slate-800 mb-2">
-                    Rewrite for this job
-                  </h2>
-                  <p className="text-slate-500 text-sm mb-4">
-                    Pick which of the missing skills you actually have, so Gemini can weave
-                    them in.
-                  </p>
-
-                  {result.missingSkillsForJob && result.missingSkillsForJob.length > 0 && (
-                    <div className="mb-4 space-y-2">
-                      {result.missingSkillsForJob.map((skill) => (
-                        <label
-                          key={skill}
-                          className="flex items-center gap-2 text-sm text-slate-700"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={!!skillChecks[skill]}
-                            onChange={() => toggleSkillCheck(skill)}
-                          />
-                          {skill}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-
-                  <label className="block text-sm text-slate-600 mb-1">
-                    Other skills to include (comma separated)
-                  </label>
-                  <input
-                    type="text"
-                    value={extraSkills}
-                    onChange={(e) => setExtraSkills(e.target.value)}
-                    placeholder="e.g. Docker, GraphQL"
-                    className="w-full border border-slate-300 rounded px-3 py-2 mb-4"
-                  />
-
-                  {rewriteError && (
-                    <div className="bg-red-100 text-red-700 text-sm p-2 rounded mb-4">
-                      {rewriteError}
-                    </div>
-                  )}
-
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.75 }}
+                  className="lg:col-span-2"
+                >
                   <MotionButton
                     type="submit"
-                    disabled={rewriting}
-                    className="w-full bg-indigo-600 text-white rounded py-2 hover:bg-indigo-700 disabled:opacity-50"
+                    disabled={matching}
+                    className="w-full bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg py-3 hover:shadow-lg shadow-purple-500/30 disabled:opacity-50"
                   >
-                    {rewriting
-                      ? 'Rewriting... (this can take a few seconds)'
-                      : 'Generate Rewrite'}
+                    {matching ? 'Matching... (this can take a few seconds)' : 'Match Resume to Job'}
                   </MotionButton>
-                </form>
+                </motion.div>
+              </form>
+            </AnimatedCard>
+          </motion.div>
+
+          {/* Loading Indicator */}
+          {hasActiveGeneration && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+            >
+              <AnimatedCard className="border border-slate-200 p-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <motion.h2
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.6 }}
+                    className="text-lg font-semibold text-slate-800"
+                  >
+                    AI is working
+                  </motion.h2>
+                  <span className="rounded-full bg-gradient-to-r from-amber-100 to-amber-200 px-3 py-1 text-xs font-semibold text-amber-900">
+                    Usually a few seconds
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.7, staggerChildren: 0.1 }}
+                  >
+                    <Skeleton className="h-4 w-11/12" />
+                    <Skeleton className="h-4 w-9/12" />
+                    <Skeleton className="h-4 w-10/12" />
+                    <Skeleton className="h-24 w-full" />
+                  </motion.div>
+                </div>
               </AnimatedCard>
-            )}
+            </motion.div>
+          )}
 
-            {rewrittenResume && (
-              <GeneratedTextBlock
-                title="Rewritten Resume"
-                text={rewrittenResume}
-                fileName="rewritten-resume.txt"
-                showDownload
-              />
-            )}
+          {/* Main Tabs Navigation - Only shown after match result */}
+          {result && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.8 }}
+            >
+              <AnimatedCard className="border border-slate-200 p-4">
+                <div className="flex gap-1 overflow-x-auto pb-1 -mx-2 px-2 scrollbar-hide">
+                  {[
+                    { id: 'match', label: 'Match Result', icon: '📊' },
+                    { id: 'keywords', label: 'Keyword Highlighter', icon: '🔍' },
+                    { id: 'ai', label: 'AI Assistance', icon: '✨' },
+                  ].map((tab) => (
+                    <MotionButton
+                      key={tab.id}
+                      onClick={() => setActiveMainTab(tab.id)}
+                      className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-all flex items-center gap-1 ${
+                        activeMainTab === tab.id
+                          ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-500/30'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                      style={{ minWidth: 'fit-content' }}
+                    >
+                      <span>{tab.icon}</span>
+                      <span>{tab.label}</span>
+                    </MotionButton>
+                  ))}
+                </div>
+              </AnimatedCard>
+            </motion.div>
+          )}
 
-            {coverLetterError && (
-              <div className="bg-red-100 text-red-700 text-sm p-2 rounded">
-                {coverLetterError}
-              </div>
-            )}
+          {/* Match Result Tab */}
+          {result && activeMainTab === 'match' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.9 }}
+            >
+              <AnimatedCard className="border border-slate-200 p-6">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 1.0 }}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-600">Match Score:</span>
+                    <span className={`px-3 py-1 rounded-full text-white text-sm font-medium ${getMatchScoreColor(result.matchScore)}`}>
+                      {result.matchScore || 0}/10
+                    </span>
+                  </div>
+                  <ProgressBar percent={result.matchScore * 10} />
 
-            {coverLetter && (
-              <GeneratedTextBlock
-                title="Cover Letter"
-                text={coverLetter}
-                fileName="cover-letter.txt"
-                showDownload
-              />
-            )}
+                  <span
+                    className={`inline-block mt-2 px-3 py-1 rounded-full text-sm font-medium ${recommendationColor(
+                      result.recommendation
+                    )}`}
+                  >
+                    {result.recommendation}
+                  </span>
 
-            {outreachError && (
-              <div className="bg-red-100 text-red-700 text-sm p-2 rounded">{outreachError}</div>
-            )}
+                  {result.verdict && (
+                    <div className="bg-gradient-to-r from-teal-50 to-teal-100 border border-teal-200 rounded-lg p-4 mt-4">
+                      <p className="text-lg font-semibold text-teal-900">{result.verdict}</p>
+                      {result.verdictReasons && result.verdictReasons.length > 0 && (
+                        <ul className="list-disc list-inside text-teal-800 text-sm mt-2 space-y-1">
+                          {result.verdictReasons.map((reason, index) => (
+                            <li key={index}>{reason}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
 
-            {outreachEmail && (
-              <GeneratedTextBlock title="Outreach Email" text={outreachEmail} showDownload={false} />
-            )}
-          </div>
+                  <div className="pt-4 border-t border-slate-100 space-y-4">
+                    <div>
+                      <p className="text-slate-700 font-medium text-sm mb-1">Expected Salary Range</p>
+                      <p className="text-slate-600 text-sm">{result.expectedSalaryRange}</p>
+                    </div>
+
+                    <div>
+                      <p className="text-slate-700 font-medium text-sm mb-1">Missing Skills For This Job</p>
+                      {result.missingSkillsForJob && result.missingSkillsForJob.length > 0 ? (
+                        <ul className="list-disc list-inside text-slate-600 text-sm space-y-1">
+                          {result.missingSkillsForJob.map((skill, index) => (
+                            <li key={index}>{skill}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-slate-400 text-sm">None</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quick AI Actions in Match Result Tab */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.1 }}
+                    className="pt-4 border-t border-slate-100"
+                  >
+                    <motion.h3
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 1.2 }}
+                      className="text-sm font-semibold text-slate-800 mb-3"
+                    >
+                      AI Assistance
+                    </motion.h3>
+                    <div className="flex gap-1 overflow-x-auto pb-1 -mx-2 px-2 scrollbar-hide">
+                      {[
+                        { id: 'rewrite', label: 'Rewrite Resume', disabled: rewriting },
+                        { id: 'coverletter', label: 'Cover Letter', disabled: generatingCoverLetter },
+                        { id: 'outreach', label: 'Outreach Email', disabled: generatingOutreach },
+                        { id: 'interview', label: 'Interview Prep', disabled: generatingInterviewPrep },
+                        { id: 'improve', label: 'Improve Bullet', disabled: improvingBullet },
+                      ].map((tab) => (
+                        <MotionButton
+                          key={tab.id}
+                          onClick={() => {
+                            setActiveMainTab('ai')
+                            setActiveAiTab(tab.id)
+                          }}
+                          disabled={tab.disabled}
+                          className={`px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-all ${
+                            activeAiTab === tab.id
+                              ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-500/30'
+                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                          style={{ minWidth: 'fit-content' }}
+                        >
+                          {tab.label}
+                        </MotionButton>
+                      ))}
+                    </div>
+                  </motion.div>
+                </motion.div>
+              </AnimatedCard>
+            </motion.div>
+          )}
+
+          {/* Keyword Highlighter Tab */}
+          {result && activeMainTab === 'keywords' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.9 }}
+            >
+              <AnimatedCard className="border border-slate-200 p-6">
+                <motion.h2
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 1.0 }}
+                  className="text-lg font-semibold text-slate-800 mb-2"
+                >
+                  Keyword Highlighter
+                </motion.h2>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 1.1 }}
+                  className="text-sm text-slate-500 mb-4"
+                >
+                  Missing job skills are highlighted below. These are the skills from the job description that aren't in your resume.
+                </motion.p>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 1.2 }}
+                  className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white/75 p-4 text-sm leading-6 text-slate-600"
+                >
+                  {renderHighlightedJobDescription()}
+                </motion.div>
+              </AnimatedCard>
+            </motion.div>
+          )}
+
+          {/* AI Assistance Tab */}
+          {result && activeMainTab === 'ai' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.9 }}
+            >
+              {/* AI Sub-tabs */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 1.0 }}
+                className="mb-4"
+              >
+                <AnimatedCard className="border border-slate-200 p-4">
+                  <div className="flex gap-1 overflow-x-auto pb-1 -mx-2 px-2 scrollbar-hide">
+                    {[
+                      { id: 'rewrite', label: 'Rewrite Resume', disabled: rewriting },
+                      { id: 'coverletter', label: 'Cover Letter', disabled: generatingCoverLetter },
+                      { id: 'outreach', label: 'Outreach Email', disabled: generatingOutreach },
+                      { id: 'interview', label: 'Interview Prep', disabled: generatingInterviewPrep },
+                      { id: 'improve', label: 'Improve Bullet', disabled: improvingBullet },
+                    ].map((tab) => (
+                      <MotionButton
+                        key={tab.id}
+                        onClick={() => setActiveAiTab(tab.id)}
+                        disabled={tab.disabled}
+                        className={`px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-all ${
+                          activeAiTab === tab.id
+                            ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-500/30'
+                            : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                        style={{ minWidth: 'fit-content' }}
+                      >
+                        {tab.label}
+                      </MotionButton>
+                    ))}
+                  </div>
+                </AnimatedCard>
+              </motion.div>
+
+              {/* AI Tab Content */}
+              <AnimatedCard className="border border-slate-200 p-6">
+                <>
+                {/* Rewrite Resume Tab */}
+                {activeAiTab === 'rewrite' && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <form onSubmit={handleRewriteSubmit}>
+                      <motion.h2
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.2 }}
+                        className="text-lg font-semibold text-slate-800 mb-2"
+                      >
+                        Rewrite for this job
+                      </motion.h2>
+                      <motion.p
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.3 }}
+                        className="text-slate-500 text-sm mb-4"
+                      >
+                        Pick which of the missing skills you actually have, so Gemini can weave them in.
+                      </motion.p>
+
+                      {result.missingSkillsForJob && result.missingSkillsForJob.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.4 }}
+                          className="mb-4 space-y-2"
+                        >
+                          {result.missingSkillsForJob.map((skill) => (
+                            <motion.label
+                              key={skill}
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ duration: 0.3 }}
+                              className="flex items-center gap-2 text-sm text-slate-700"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={!!skillChecks[skill]}
+                                onChange={() => toggleSkillCheck(skill)}
+                              />
+                              {skill}
+                            </motion.label>
+                          ))}
+                        </motion.div>
+                      )}
+
+                      <motion.label
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.5 }}
+                        className="block text-sm text-slate-600 mb-1"
+                      >
+                        Other skills to include (comma separated)
+                      </motion.label>
+                      <motion.input
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.6 }}
+                        type="text"
+                        value={extraSkills}
+                        onChange={(e) => setExtraSkills(e.target.value)}
+                        placeholder="e.g. Docker, GraphQL"
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-4 bg-white"
+                      />
+
+                      {rewriteError && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.7 }}
+                          className="bg-red-100 text-red-700 text-sm p-2 rounded-lg mb-4"
+                        >
+                          {rewriteError}
+                        </motion.div>
+                      )}
+
+                      {rewrittenResume ? (
+                        <GeneratedTextBlock
+                          title="Rewritten Resume"
+                          text={rewrittenResume}
+                          fileName="rewritten-resume.txt"
+                          showDownload
+                        />
+                      ) : (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.8 }}
+                        >
+                          <MotionButton
+                            type="submit"
+                            disabled={rewriting}
+                            className="w-full bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-lg py-2 hover:shadow-lg shadow-teal-500/30 disabled:opacity-50"
+                          >
+                            {rewriting ? 'Rewriting...' : 'Generate Rewrite'}
+                          </MotionButton>
+                        </motion.div>
+                      )}
+                    </form>
+                  </motion.div>
+                )}
+
+                {/* Cover Letter Tab */}
+                {activeAiTab === 'coverletter' && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <motion.h2
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.2 }}
+                      className="text-lg font-semibold text-slate-800 mb-4"
+                    >
+                      Generate Cover Letter
+                    </motion.h2>
+                    
+                    {coverLetterError && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="bg-red-100 text-red-700 text-sm p-2 rounded-lg mb-4"
+                      >
+                        {coverLetterError}
+                      </motion.div>
+                    )}
+                    
+                    {coverLetter ? (
+                      <GeneratedTextBlock
+                        title="Cover Letter"
+                        text={coverLetter}
+                        fileName="cover-letter.txt"
+                        showDownload
+                      />
+                    ) : (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                      >
+                        <MotionButton
+                          onClick={handleGenerateCoverLetter}
+                          disabled={generatingCoverLetter}
+                          className="w-full bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg py-2 hover:shadow-lg shadow-purple-500/30 disabled:opacity-50"
+                        >
+                          {generatingCoverLetter ? 'Generating...' : 'Generate Cover Letter'}
+                        </MotionButton>
+                      </motion.div>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* Outreach Email Tab */}
+                {activeAiTab === 'outreach' && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <motion.h2
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.2 }}
+                      className="text-lg font-semibold text-slate-800 mb-4"
+                    >
+                      Generate Outreach Email
+                    </motion.h2>
+                    
+                    {outreachError && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="bg-red-100 text-red-700 text-sm p-2 rounded-lg mb-4"
+                      >
+                        {outreachError}
+                      </motion.div>
+                    )}
+                    
+                    {outreachEmail ? (
+                      <GeneratedTextBlock
+                        title="Outreach Email"
+                        text={outreachEmail}
+                        fileName="outreach-email.txt"
+                        showDownload={false}
+                      />
+                    ) : (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                      >
+                        <MotionButton
+                          onClick={handleGenerateOutreach}
+                          disabled={generatingOutreach}
+                          className="w-full bg-gradient-to-r from-amber-600 to-amber-700 text-white rounded-lg py-2 hover:shadow-lg shadow-amber-500/30 disabled:opacity-50"
+                        >
+                          {generatingOutreach ? 'Generating...' : 'Generate Outreach Email'}
+                        </MotionButton>
+                      </motion.div>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* Interview Prep Tab */}
+                {activeAiTab === 'interview' && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <motion.h2
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.2 }}
+                      className="text-lg font-semibold text-slate-800 mb-4"
+                    >
+                      Interview Prep
+                    </motion.h2>
+                    
+                    {interviewPrepError && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="bg-red-100 text-red-700 text-sm p-2 rounded-lg mb-4"
+                      >
+                        {interviewPrepError}
+                      </motion.div>
+                    )}
+                    
+                    {interviewPrep ? (
+                      <GeneratedTextBlock
+                        title="Interview Prep"
+                        text={interviewPrep}
+                        fileName="interview-prep.txt"
+                        showDownload
+                      />
+                    ) : (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                      >
+                        <MotionButton
+                          onClick={handleGenerateInterviewPrep}
+                          disabled={generatingInterviewPrep}
+                          className="w-full bg-gradient-to-r from-rose-600 to-rose-700 text-white rounded-lg py-2 hover:shadow-lg shadow-rose-500/30 disabled:opacity-50"
+                        >
+                          {generatingInterviewPrep ? 'Generating...' : 'Generate Interview Prep'}
+                        </MotionButton>
+                      </motion.div>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* Improve Bullet Tab */}
+                {activeAiTab === 'improve' && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <form onSubmit={handleImproveBullet}>
+                      <motion.h2
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.2 }}
+                        className="text-lg font-semibold text-slate-800 mb-2"
+                      >
+                        Improve One Resume Bullet
+                      </motion.h2>
+                      <motion.p
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.3 }}
+                        className="text-slate-500 text-sm mb-4"
+                      >
+                        Paste one bullet and Gemini will make it sharper for this job.
+                      </motion.p>
+                      <motion.textarea
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        value={bulletText}
+                        onChange={(e) => setBulletText(e.target.value)}
+                        rows={5}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-4 bg-white"
+                        placeholder="e.g. Built responsive React components for an internal dashboard"
+                      />
+                      {bulletError && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.5 }}
+                          className="bg-red-100 text-red-700 text-sm p-2 rounded-lg mb-4"
+                        >
+                          {bulletError}
+                        </motion.div>
+                      )}
+                      
+                      {improvedBullet ? (
+                        <GeneratedTextBlock
+                          title="Improved Resume Bullet"
+                          text={improvedBullet}
+                          fileName="improved-bullet.txt"
+                          showDownload
+                        />
+                      ) : (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.6 }}
+                        >
+                          <MotionButton
+                            type="submit"
+                            disabled={improvingBullet}
+                            className="w-full bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg py-2 hover:shadow-lg shadow-purple-500/30 disabled:opacity-50"
+                          >
+                            {improvingBullet ? 'Improving...' : 'Improve Bullet'}
+                          </MotionButton>
+                        </motion.div>
+                      )}
+                    </form>
+                  </motion.div>
+                )}
+                </>
+              </AnimatedCard>
+            </motion.div>
+          )}
         </div>
       </div>
     </div>

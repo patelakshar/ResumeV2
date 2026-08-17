@@ -58,6 +58,14 @@ const jobMatchSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  interviewPrep: {
+    type: String,
+    default: '',
+  },
+  improvedBullets: {
+    type: [String],
+    default: [],
+  },
   createdAt: {
     type: Date,
     default: Date.now,

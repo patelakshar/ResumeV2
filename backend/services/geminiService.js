@@ -210,10 +210,79 @@ async function generateOutreachEmail(resumeText, jobDescription) {
   return parsed.outreachEmail
 }
 
+function buildInterviewPrepPrompt(resumeText, jobDescription) {
+  return `You are an interview coach.
+Using the resume and job description below, create concise interview prep.
+Return ONLY a JSON object (no markdown, no extra text) with one field:
+
+- interviewPrep: string, with sections for likely technical questions, behavioral questions, a short "tell me about yourself" answer, and 3 questions to ask the interviewer
+
+Resume text:
+"""
+${resumeText}
+"""
+
+Job description:
+"""
+${jobDescription}
+"""`
+}
+
+async function generateInterviewPrep(resumeText, jobDescription) {
+  const prompt = buildInterviewPrepPrompt(resumeText, jobDescription)
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt,
+    config: {
+      responseMimeType: 'application/json',
+    },
+  })
+
+  const parsed = JSON.parse(cleanJsonText(response.text.trim()))
+  return parsed.interviewPrep
+}
+
+function buildBulletImprovementPrompt(bulletText, jobDescription) {
+  return `You are a resume editor.
+Improve the resume bullet below so it is stronger, more specific, and more ATS-friendly for the job description.
+Do not invent numbers, employers, tools, or achievements that are not implied by the original bullet.
+Return ONLY a JSON object (no markdown, no extra text) with one field:
+
+- improvedBullet: string, one polished resume bullet
+
+Original bullet:
+"""
+${bulletText}
+"""
+
+Job description:
+"""
+${jobDescription}
+"""`
+}
+
+async function improveResumeBullet(bulletText, jobDescription) {
+  const prompt = buildBulletImprovementPrompt(bulletText, jobDescription)
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt,
+    config: {
+      responseMimeType: 'application/json',
+    },
+  })
+
+  const parsed = JSON.parse(cleanJsonText(response.text.trim()))
+  return parsed.improvedBullet
+}
+
 module.exports = {
   analyzeResumeText,
   matchResumeToJob,
   rewriteResumeForJob,
   generateCoverLetter,
   generateOutreachEmail,
+  generateInterviewPrep,
+  improveResumeBullet,
 }

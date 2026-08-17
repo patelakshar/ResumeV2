@@ -25,13 +25,13 @@ function NavbarLink({ to, children }) {
       initial="rest"
       whileHover="hover"
       animate="rest"
-      className="relative inline-block py-1 text-slate-200 transition-colors hover:text-indigo-300"
+      className="relative inline-block py-1 text-stone-200 transition-colors hover:text-teal-300"
     >
       {children}
       <motion.span
         variants={underlineVariants}
         transition={{ duration: 0.25, ease: 'easeOut' }}
-        className="absolute -bottom-0.5 left-0 h-[1.5px] w-full origin-left bg-indigo-400"
+        className="absolute -bottom-0.5 left-0 h-[1.5px] w-full origin-left bg-teal-300"
       />
     </MotionLink>
   )

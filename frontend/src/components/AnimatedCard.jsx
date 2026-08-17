@@ -10,7 +10,7 @@ function AnimatedCard({ children, className = '', delay = 0 }) {
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut', delay }}
-      className={`bg-white rounded-lg shadow-md ${className}`}
+      className={`bg-white/90 rounded-lg shadow-[0_18px_45px_-32px_rgba(28,25,23,0.55)] backdrop-blur ${className}`}
     >
       {children}
     </motion.div>

@@ -3,7 +3,7 @@ import MotionButton from './MotionButton'
 
 // Shows a block of AI-generated text (like a cover letter or rewritten
 // resume) with a Copy button, and an optional Download button.
-function GeneratedTextBlock({ title, text, fileName, showDownload = true }) {
+function GeneratedTextBlock({ title, text, fileName, showDownload = true, className = '' }) {
   // Copies the generated text to the clipboard so the user can paste
   // it wherever they need it.
   function handleCopy() {
@@ -24,7 +24,7 @@ function GeneratedTextBlock({ title, text, fileName, showDownload = true }) {
   }
 
   return (
-    <AnimatedCard className="p-6 mt-6">
+    <AnimatedCard className={`p-6 ${className}`}>
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
         <div className="flex gap-2">

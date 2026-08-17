@@ -11,7 +11,7 @@ function ProtectedRoute({ children }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-100 p-8">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50/20 p-8">
         <Skeleton className="h-10 w-40 mb-6" />
         <Skeleton className="h-40 w-full" />
       </div>

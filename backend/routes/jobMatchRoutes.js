@@ -7,6 +7,8 @@ const {
   rewriteResumeForJob,
   generateCoverLetter,
   generateOutreachEmail,
+  generateInterviewPrep,
+  improveResumeBullet,
 } = require('../services/geminiService')
 
 const router = express.Router()
@@ -132,6 +134,54 @@ router.post('/:id/outreach-email', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ message: 'Something went wrong generating the outreach email' })
+  }
+})
+
+// POST /api/jobmatch/:id/interview-prep
+// Protected route: generates practical interview prep for this matched job.
+router.post('/:id/interview-prep', requireAuth, async (req, res) => {
+  try {
+    const { jobMatch, resume } = await findJobMatchWithResume(req.params.id, req.userId)
+    if (!jobMatch || !resume) {
+      return res.status(404).json({ message: 'Job match not found' })
+    }
+
+    const interviewPrep = await generateInterviewPrep(resume.extractedText, jobMatch.jobDescription)
+
+    jobMatch.interviewPrep = interviewPrep
+    await jobMatch.save()
+
+    res.json({ interviewPrep })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: 'Something went wrong generating interview prep' })
+  }
+})
+
+// POST /api/jobmatch/:id/improve-bullet
+// Protected route: improves one resume bullet for this job description.
+router.post('/:id/improve-bullet', requireAuth, async (req, res) => {
+  try {
+    const { bulletText } = req.body
+
+    if (!bulletText || !bulletText.trim()) {
+      return res.status(400).json({ message: 'Resume bullet is required' })
+    }
+
+    const { jobMatch } = await findJobMatchWithResume(req.params.id, req.userId)
+    if (!jobMatch) {
+      return res.status(404).json({ message: 'Job match not found' })
+    }
+
+    const improvedBullet = await improveResumeBullet(bulletText, jobMatch.jobDescription)
+
+    jobMatch.improvedBullets.push(improvedBullet)
+    await jobMatch.save()
+
+    res.json({ improvedBullet })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: 'Something went wrong improving the bullet' })
   }
 })
 
