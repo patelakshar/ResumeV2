@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import ResumeUpload from './pages/ResumeUpload'
 import ResumeAnalysis from './pages/ResumeAnalysis'
 import JobMatching from './pages/JobMatching'
+import JobFinder from './pages/JobFinder'
 import History from './pages/History'
 import Profile from './pages/Profile'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -82,6 +83,16 @@ function App() {
             <ProtectedRoute>
               <PageTransition>
                 <JobMatching />
+              </PageTransition>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/find-jobs"
+          element={
+            <ProtectedRoute>
+              <PageTransition>
+                <JobFinder />
               </PageTransition>
             </ProtectedRoute>
           }
