@@ -18,7 +18,7 @@ router.post('/find', requireAuth, async (req, res) => {
     }
 
     // Get the resume
-    const resume = await Resume.findOne({ _id: resumeId, userId: req.user.id })
+    const resume = await Resume.findOne({ _id: resumeId, userId: req.userId })
     if (!resume) {
       return res.status(404).json({ error: 'Resume not found' })
     }
@@ -38,12 +38,11 @@ router.post('/find', requireAuth, async (req, res) => {
       model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
-        temperature: 0.7,
-        maxOutputTokenCount: 8192
+        responseMimeType: 'application/json'
       }
     })
 
-    const rawText = response.response.text()
+    const rawText = response.text
     const cleanedText = cleanJsonText(rawText)
     
     // Parse the JSON response
@@ -65,7 +64,7 @@ router.post('/find', requireAuth, async (req, res) => {
 
     // Save the search to history
     const searchRecord = new JobSearch({
-      userId: req.user.id,
+      userId: req.userId,
       resumeId,
       filters: {
         jobTitle,
@@ -98,7 +97,7 @@ router.post('/find', requireAuth, async (req, res) => {
 // GET /api/jobs/history - Get user's job search history
 router.get('/history', requireAuth, async (req, res) => {
   try {
-    const searches = await JobSearch.find({ userId: req.user.id })
+    const searches = await JobSearch.find({ userId: req.userId })
       .sort({ createdAt: -1 })
       .limit(20)
 
@@ -113,7 +112,7 @@ router.get('/:id', requireAuth, async (req, res) => {
   try {
     const search = await JobSearch.findOne({
       _id: req.params.id,
-      userId: req.user.id
+      userId: req.userId
     })
 
     if (!search) {
