@@ -1,11 +1,9 @@
 const express = require('express')
 const router = express.Router()
-const { GoogleGenAI } = require('@google/genai')
+const { generateJSON, cleanJsonText } = require('../services/aiClient')
 const requireAuth = require('../middleware/authMiddleware')
 const Resume = require('../models/Resume')
 const JobSearch = require('../models/JobSearch')
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
 
 // POST /api/jobs/find - Find jobs matching user's resume with filters
 router.post('/find', requireAuth, async (req, res) => {
@@ -18,7 +16,7 @@ router.post('/find', requireAuth, async (req, res) => {
     }
 
     // Get the resume
-    const resume = await Resume.findOne({ _id: resumeId, userId: req.user.id })
+    const resume = await Resume.findOne({ _id: resumeId, userId: req.userId })
     if (!resume) {
       return res.status(404).json({ error: 'Resume not found' })
     }
@@ -34,16 +32,7 @@ router.post('/find', requireAuth, async (req, res) => {
       company
     })
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        temperature: 0.7,
-        maxOutputTokenCount: 8192
-      }
-    })
-
-    const rawText = response.response.text()
+    const rawText = await generateJSON(prompt)
     const cleanedText = cleanJsonText(rawText)
     
     // Parse the JSON response
@@ -65,7 +54,7 @@ router.post('/find', requireAuth, async (req, res) => {
 
     // Save the search to history
     const searchRecord = new JobSearch({
-      userId: req.user.id,
+      userId: req.userId,
       resumeId,
       filters: {
         jobTitle,
@@ -98,7 +87,7 @@ router.post('/find', requireAuth, async (req, res) => {
 // GET /api/jobs/history - Get user's job search history
 router.get('/history', requireAuth, async (req, res) => {
   try {
-    const searches = await JobSearch.find({ userId: req.user.id })
+    const searches = await JobSearch.find({ userId: req.userId })
       .sort({ createdAt: -1 })
       .limit(20)
 
@@ -113,7 +102,7 @@ router.get('/:id', requireAuth, async (req, res) => {
   try {
     const search = await JobSearch.findOne({
       _id: req.params.id,
-      userId: req.user.id
+      userId: req.userId
     })
 
     if (!search) {
@@ -173,15 +162,6 @@ ${resumeText}
 """${filterText}
 
 Find real, currently open positions. Include direct apply links. If you cannot find real job listings, generate realistic job opportunities based on the resume and filters, but clearly mark them as "Generated Suggestions" in the source field. Always include valid-looking URLs.`
-}
-
-// Helper to clean JSON text
-function cleanJsonText(rawText) {
-  return rawText
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/, '')
-    .replace(/```$/, '')
-    .trim()
 }
 
 module.exports = router

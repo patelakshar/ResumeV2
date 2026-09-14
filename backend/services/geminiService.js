@@ -1,8 +1,4 @@
-const { GoogleGenAI } = require('@google/genai')
-
-// One shared Gemini client for the whole app, built using the API key
-// from our .env file. This key is never sent to the frontend.
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+const { generateJSON, cleanJsonText } = require('./aiClient')
 
 // Builds the exact prompt we send to Gemini. It includes the resume
 // text and lists every JSON field we need back, so the AI's answer
@@ -27,32 +23,13 @@ ${resumeText}
 """`
 }
 
-// Gemini sometimes wraps its JSON reply in a markdown code fence even
-// when we ask it not to. This strips that off before we try to parse
-// the text as JSON.
-function cleanJsonText(rawText) {
-  return rawText
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/, '')
-    .replace(/```$/, '')
-    .trim()
-}
-
-// Sends the resume text to Gemini and turns its reply into a plain
-// JavaScript object. We ask Gemini to reply with JSON only, but we
-// still strip markdown code fences just in case it adds them anyway.
+// Sends the resume text to the AI and turns its reply into a plain
+// JavaScript object. We ask for JSON only, but still strip markdown
+// code fences just in case a provider adds them anyway.
 async function analyzeResumeText(resumeText) {
   const prompt = buildAnalysisPrompt(resumeText)
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-    },
-  })
-
-  return JSON.parse(cleanJsonText(response.text.trim()))
+  const rawText = await generateJSON(prompt)
+  return JSON.parse(cleanJsonText(rawText.trim()))
 }
 
 // Builds the prompt we send to Gemini for job matching. It includes
@@ -84,16 +61,8 @@ ${jobDescription}
 // reply into a plain JavaScript object, the same way analyzeResumeText does.
 async function matchResumeToJob(resumeText, jobDescription) {
   const prompt = buildJobMatchPrompt(resumeText, jobDescription)
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-    },
-  })
-
-  return JSON.parse(cleanJsonText(response.text.trim()))
+  const rawText = await generateJSON(prompt)
+  return JSON.parse(cleanJsonText(rawText.trim()))
 }
 
 // Builds the prompt asking Gemini to rewrite a resume for one specific
@@ -124,16 +93,8 @@ ${jobDescription}
 // text as a plain string.
 async function rewriteResumeForJob(resumeText, jobDescription, additionalSkills) {
   const prompt = buildRewritePrompt(resumeText, jobDescription, additionalSkills)
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-    },
-  })
-
-  const parsed = JSON.parse(cleanJsonText(response.text.trim()))
+  const rawText = await generateJSON(prompt)
+  const parsed = JSON.parse(cleanJsonText(rawText.trim()))
   return parsed.rewrittenResume
 }
 
@@ -160,16 +121,8 @@ ${jobDescription}
 // text as a plain string.
 async function generateCoverLetter(resumeText, jobDescription) {
   const prompt = buildCoverLetterPrompt(resumeText, jobDescription)
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-    },
-  })
-
-  const parsed = JSON.parse(cleanJsonText(response.text.trim()))
+  const rawText = await generateJSON(prompt)
+  const parsed = JSON.parse(cleanJsonText(rawText.trim()))
   return parsed.coverLetter
 }
 
@@ -197,16 +150,8 @@ ${jobDescription}
 // text as a plain string.
 async function generateOutreachEmail(resumeText, jobDescription) {
   const prompt = buildOutreachEmailPrompt(resumeText, jobDescription)
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-    },
-  })
-
-  const parsed = JSON.parse(cleanJsonText(response.text.trim()))
+  const rawText = await generateJSON(prompt)
+  const parsed = JSON.parse(cleanJsonText(rawText.trim()))
   return parsed.outreachEmail
 }
 
@@ -230,16 +175,8 @@ ${jobDescription}
 
 async function generateInterviewPrep(resumeText, jobDescription) {
   const prompt = buildInterviewPrepPrompt(resumeText, jobDescription)
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-    },
-  })
-
-  const parsed = JSON.parse(cleanJsonText(response.text.trim()))
+  const rawText = await generateJSON(prompt)
+  const parsed = JSON.parse(cleanJsonText(rawText.trim()))
   return parsed.interviewPrep
 }
 
@@ -264,16 +201,8 @@ ${jobDescription}
 
 async function improveResumeBullet(bulletText, jobDescription) {
   const prompt = buildBulletImprovementPrompt(bulletText, jobDescription)
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-    },
-  })
-
-  const parsed = JSON.parse(cleanJsonText(response.text.trim()))
+  const rawText = await generateJSON(prompt)
+  const parsed = JSON.parse(cleanJsonText(rawText.trim()))
   return parsed.improvedBullet
 }
 
