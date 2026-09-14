@@ -1,11 +1,9 @@
 const express = require('express')
 const router = express.Router()
-const { GoogleGenAI } = require('@google/genai')
+const { generateJSON, cleanJsonText } = require('../services/aiClient')
 const requireAuth = require('../middleware/authMiddleware')
 const Resume = require('../models/Resume')
 const JobSearch = require('../models/JobSearch')
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
 
 // POST /api/jobs/find - Find jobs matching user's resume with filters
 router.post('/find', requireAuth, async (req, res) => {
@@ -34,15 +32,7 @@ router.post('/find', requireAuth, async (req, res) => {
       company
     })
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json'
-      }
-    })
-
-    const rawText = response.text
+    const rawText = await generateJSON(prompt)
     const cleanedText = cleanJsonText(rawText)
     
     // Parse the JSON response
@@ -172,15 +162,6 @@ ${resumeText}
 """${filterText}
 
 Find real, currently open positions. Include direct apply links. If you cannot find real job listings, generate realistic job opportunities based on the resume and filters, but clearly mark them as "Generated Suggestions" in the source field. Always include valid-looking URLs.`
-}
-
-// Helper to clean JSON text
-function cleanJsonText(rawText) {
-  return rawText
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/, '')
-    .replace(/```$/, '')
-    .trim()
 }
 
 module.exports = router
